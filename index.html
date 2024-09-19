@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Interaktive Karte zur Bereichsauswahl</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+        }
+        #map { 
+            height: 100%;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            left: 50px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 300px;
+            font-size: 14px;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        #confirm {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 10px;
+            padding: 12px 24px;
+            font-size: 18px;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            outline: none;
+            color: #fff;
+            background-color: #4CAF50;
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        #confirm:hover {background-color: #45a049}
+        #confirm:active {
+            background-color: #3e8e41;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transform: translateX(-50%) translateY(2px);
+        }
+        input[type="number"] {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        #drawManual {
+            padding: 8px 15px;
+            font-size: 14px;
+            border-radius: 5px;
+            background-color: #008CBA;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #drawManual:hover {
+            background-color: #007B9A;
+        }
+        }
+        .leaflet-draw-toolbar a {
+            width: 40px !important;
+            height: 40px !important;
+            line-height: 40px !important;
+        }
+        .leaflet-draw-toolbar svg {
+            width: 26px !important;
+            height: 26px !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="map">
+        <div id="instructions">
+            <h3>Anleitung zur Bereichsauswahl:</h3>
+            <ol>
+                <li>Nutzen Sie die Werkzeuge oben links für:
+                    <ul>
+                        <li>Rechteck: Klicken und ziehen Sie, um ein Rechteck zu zeichnen.</li>
+                        <li>Polygon: Klicken Sie für jeden Punkt, Doppelklick zum Beenden.</li>
+                        <li>Kreis: Klicken Sie für das Zentrum, ziehen Sie für den gewünschten Radius.</li>
+                    </ul>
+                </li>
+                <li>Bearbeiten Sie Formen mit dem Stift-Werkzeug oder löschen Sie sie mit dem Papierkorb.</li>
+                <li>Alternativ können Sie unten Koordinaten und Radius für einen Kreis manuell eingeben.</li>
+                <li>Klicken Sie auf "Bestätigen", um Ihre Auswahl zu speichern und herunterzuladen.</li>
+            </ol>
+        </div>
+        <div id="controls">
+            <button id="confirm">Bestätigen</button>
+            <div>
+                <input type="number" id="lat" placeholder="Breitengrad">
+                <input type="number" id="lon" placeholder="Längengrad">
+                <input type="number" id="radius" placeholder="Radius (km)">
+                <button id="drawManual">Kreis einzeichnen</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var map = L.map('map', {
+            center: [35.5, 18.5], // Mittelmeer
+            zoom: 6,
+            zoomControl: false
+        });
+
+        L.control.zoom({
+            position: 'topright'
+        }).addTo(map);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        var drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+
+        var drawControl = new L.Control.Draw({
+            draw: {
+                polygon: true,
+                rectangle: true,
+                circle: true,
+                marker: false,
+                polyline: false
+            },
+            edit: {
+                featureGroup: drawnItems,
+                remove: true
+            }
+        });
+        map.addControl(drawControl);
+
+        map.on(L.Draw.Event.CREATED, function (e) {
+            var layer = e.layer;
+            if (layer instanceof L.Circle) {
+                var center = layer.getLatLng();
+                var radius = layer.getRadius() / 1000; // Konvertierung zu Kilometern
+                layer.feature = {
+                    type: "Feature",
+                    properties: {
+                        radius: radius
+                    },
+                    geometry: {
+                        type: "Point",
+                        coordinates: [center.lng, center.lat]
+                    }
+                };
+            }
+            drawnItems.addLayer(layer);
+        });
+
+        document.getElementById('confirm').addEventListener('click', function() {
+            var geoJSON = drawnItems.toGeoJSON();
+            if (geoJSON.features.length > 0) {
+                var feature = geoJSON.features[0];
+                if (feature.geometry.type === "Point" && feature.properties && feature.properties.radius) {
+                    // Es handelt sich um einen Kreis, wir behalten die Radiusinformation bei
+                    geoJSON = {
+                        type: "FeatureCollection",
+                        features: [feature]
+                    };
+                }
+                console.log("GeoJSON zum Senden:", JSON.stringify(geoJSON));
+                downloadGeoJSON(geoJSON);
+            } else {
+                alert('Bitte wählen Sie zuerst einen Bereich aus.');
+            }
+        });
+
+        function downloadGeoJSON(geoJSON) {
+            var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(geoJSON));
+            var downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "selected_area.geojson");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        document.getElementById('drawManual').addEventListener('click', function() {
+            var lat = parseFloat(document.getElementById('lat').value);
+            var lon = parseFloat(document.getElementById('lon').value);
+            var radius = parseFloat(document.getElementById('radius').value);
+            
+            if (isNaN(lat) || isNaN(lon) || isNaN(radius)) {
+                alert('Bitte geben Sie gültige Werte ein.');
+                return;
+            }
+
+            drawnItems.clearLayers();
+            var circle = L.circle([lat, lon], {radius: radius * 1000}).addTo(drawnItems);
+            circle.feature = {
+                type: "Feature",
+                properties: {
+                    radius: radius
+                },
+                geometry: {
+                    type: "Point",
+                    coordinates: [lon, lat]
+                }
+            };
+            map.fitBounds(circle.getBounds());
+        });
+    </script>
+</body>
+</html>
