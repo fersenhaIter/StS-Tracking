@@ -1,0 +1,7 @@
+opencv-python
+numpy
+deepface
+insightface
+scikit-learn
+facenet-pytorch
+torch
